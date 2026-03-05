@@ -1,0 +1,11 @@
+flask==3.1.0
+psycopg2-binary==2.9.10
+prometheus_client==0.21.1
+gunicorn==23.0.0
+setuptools==75.0.0
+opentelemetry-api==1.27.0
+opentelemetry-sdk==1.27.0
+opentelemetry-exporter-otlp-proto-grpc==1.27.0
+opentelemetry-instrumentation-flask==0.48b0
+opentelemetry-instrumentation-psycopg2==0.48b0
+opentelemetry-instrumentation-requests==0.48b0

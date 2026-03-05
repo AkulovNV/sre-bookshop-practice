@@ -1,0 +1,258 @@
+# =============================================================================
+# Мониторинг и SLO — ServiceMonitor + PrometheusRule
+# Требует: Prometheus Operator (kube-prometheus-stack)
+# =============================================================================
+
+# --- ServiceMonitor для catalog-api ---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: catalog-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: catalog-api
+    app.kubernetes.io/part-of: bookshop
+    # Label для обнаружения Prometheus Operator
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+
+---
+# --- ServiceMonitor для order-api ---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: order-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: order-api
+    app.kubernetes.io/part-of: bookshop
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+
+---
+# =============================================================================
+# PrometheusRule — recording rules для SLI и alerting rules для SLO
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: bookshop-slo
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # -----------------------------------------------------------------
+    # Recording Rules — предвычисленные SLI метрики
+    # -----------------------------------------------------------------
+    - name: bookshop.sli.recording
+      interval: 30s
+      rules:
+        # --- catalog-api: Availability SLI ---
+        - record: bookshop:catalog_api:availability:rate5m
+          expr: |
+            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[5m]))
+          labels:
+            service: catalog-api
+            sli_type: availability
+
+        # --- catalog-api: Latency SLI (p95 < 300ms) ---
+        - record: bookshop:catalog_api:latency_good:rate5m
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api", le="0.3"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="catalog-api"}[5m]))
+          labels:
+            service: catalog-api
+            sli_type: latency
+            threshold: "300ms"
+
+        # --- order-api: Availability SLI ---
+        - record: bookshop:order_api:availability:rate5m
+          expr: |
+            sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[5m]))
+          labels:
+            service: order-api
+            sli_type: availability
+
+        # --- order-api: Latency SLI (p95 < 500ms) ---
+        - record: bookshop:order_api:latency_good:rate5m
+          expr: |
+            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api", le="0.5"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="order-api"}[5m]))
+          labels:
+            service: order-api
+            sli_type: latency
+            threshold: "500ms"
+
+        # --- Error Budget: оставшийся бюджет за 30 дней ---
+        # catalog-api (SLO: 99.5%)
+        - record: bookshop:catalog_api:error_budget_remaining:ratio
+          expr: |
+            1 - (
+              (1 - bookshop:catalog_api:availability:rate5m)
+              / 0.005
+            )
+          labels:
+            service: catalog-api
+            slo: "99.5"
+
+        # order-api (SLO: 99.95%)
+        - record: bookshop:order_api:error_budget_remaining:ratio
+          expr: |
+            1 - (
+              (1 - bookshop:order_api:availability:rate5m)
+              / 0.0005
+            )
+          labels:
+            service: order-api
+            slo: "99.95"
+
+    # -----------------------------------------------------------------
+    # Alerting Rules — срабатывают при угрозе нарушения SLO
+    # -----------------------------------------------------------------
+    - name: bookshop.slo.alerts
+      rules:
+        # === BURN RATE ALERTS (Multi-window) ===
+        # Методика: Google SRE Workbook, Chapter 5
+        # Быстрое сжигание бюджета → немедленная реакция
+
+        # --- catalog-api: 2% бюджета сжигается за 1 час (14.4x burn rate) ---
+        - alert: CatalogApiHighBurnRate
+          expr: |
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[1h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[1h]))
+            ) > (14.4 * 0.005)
+            and
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[5m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[5m]))
+            ) > (14.4 * 0.005)
+          for: 2m
+          labels:
+            severity: critical
+            service: catalog-api
+            slo: "99.5"
+          annotations:
+            summary: "catalog-api: высокий burn rate Error Budget"
+            description: "catalog-api сжигает Error Budget в 14.4x быстрее нормы. При текущей скорости бюджет будет исчерпан за ~2 дня."
+            runbook_url: "https://wiki.internal/runbooks/catalog-api-slo-breach"
+
+        # --- order-api: высокий burn rate (критичный сервис) ---
+        - alert: OrderApiHighBurnRate
+          expr: |
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[1h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[1h]))
+            ) > (14.4 * 0.0005)
+            and
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[5m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[5m]))
+            ) > (14.4 * 0.0005)
+          for: 1m  # Быстрее реагируем для критичного сервиса
+          labels:
+            severity: critical
+            service: order-api
+            slo: "99.95"
+          annotations:
+            summary: "order-api: CRITICAL — высокий burn rate Error Budget"
+            description: "order-api (финансовые операции) сжигает Error Budget в 14.4x быстрее нормы."
+            runbook_url: "https://wiki.internal/runbooks/order-api-slo-breach"
+
+        # --- Медленное сжигание (5% за 6 часов = 6x burn rate) ---
+        - alert: CatalogApiSlowBurnRate
+          expr: |
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[6h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[6h]))
+            ) > (6 * 0.005)
+            and
+            (
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[30m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[30m]))
+            ) > (6 * 0.005)
+          for: 15m
+          labels:
+            severity: warning
+            service: catalog-api
+          annotations:
+            summary: "catalog-api: медленное сжигание Error Budget"
+            description: "catalog-api сжигает Error Budget в 6x быстрее нормы. При текущей скорости бюджет будет исчерпан за ~5 дней."
+
+        # === LATENCY ALERTS ===
+        - alert: CatalogApiLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api"}[5m]))
+              by (le)
+            ) > 0.3
+          for: 5m
+          labels:
+            severity: warning
+            service: catalog-api
+            sli_type: latency
+          annotations:
+            summary: "catalog-api: p95 latency > 300ms"
+            description: "catalog-api p95 latency: {{ $value | humanizeDuration }}. SLO threshold: 300ms."
+
+        - alert: OrderApiLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api"}[5m]))
+              by (le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            service: order-api
+            sli_type: latency
+          annotations:
+            summary: "order-api: p95 latency > 500ms"
+
+        # === ERROR BUDGET EXHAUSTION ===
+        - alert: OrderApiErrorBudgetLow
+          expr: bookshop:order_api:error_budget_remaining:ratio < 0.2
+          for: 5m
+          labels:
+            severity: critical
+            service: order-api
+          annotations:
+            summary: "order-api: Error Budget < 20%"
+            description: "Оставшийся Error Budget: {{ $value | humanizePercentage }}. Рекомендуется заморозка фич."
+
+        # === POD AVAILABILITY ===
+        - alert: BookshopPodNotReady
+          expr: |
+            kube_deployment_status_replicas_ready{namespace="bookshop"}
+            / kube_deployment_spec_replicas{namespace="bookshop"}
+            < 0.5
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.deployment }}: < 50% подов Ready"
+            description: "Deployment {{ $labels.deployment }} имеет менее 50% готовых реплик."

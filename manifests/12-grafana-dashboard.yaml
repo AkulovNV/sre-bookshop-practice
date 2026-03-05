@@ -1,0 +1,268 @@
+# =============================================================================
+# Grafana Dashboard — Bookshop API Services
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bookshop-api-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  bookshop-api.json: |
+    {
+      "title": "Bookshop — API Services",
+      "tags": ["bookshop", "slo", "sre"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "title": "catalog-api: Availability",
+          "type": "gauge",
+          "id": 1,
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "(sum(rate(http_requests_total{job=\"catalog-api\", status!~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"catalog-api\"}[5m]))) * 100",
+              "legendFormat": "Availability %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99, "color": "yellow" },
+                  { "value": 99.5, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "order-api: Availability",
+          "type": "gauge",
+          "id": 2,
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "(sum(rate(http_requests_total{job=\"order-api\", status!~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"order-api\"}[5m]))) * 100",
+              "legendFormat": "Availability %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99.5, "color": "yellow" },
+                  { "value": 99.95, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Request Rate (RPS)",
+          "type": "stat",
+          "id": 3,
+          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "catalog-api"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "order-api"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" }
+          }
+        },
+        {
+          "title": "Pods Ready",
+          "type": "stat",
+          "id": 4,
+          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_ready{namespace=\"bookshop\", deployment=~\"catalog-api|order-api|frontend\"}",
+              "legendFormat": "{{ deployment }}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 1, "color": "yellow" },
+                  { "value": 2, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "catalog-api: Request Rate & Errors",
+          "type": "timeseries",
+          "id": 5,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "{{ endpoint }}"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", status=~\"5..\"}[5m]))",
+              "legendFormat": "5xx errors"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "5xx errors" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.fillOpacity", "value": 20 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "order-api: Request Rate & Errors",
+          "type": "timeseries",
+          "id": 6,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "{{ endpoint }}"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=\"order-api\", status=~\"5..\"}[5m]))",
+              "legendFormat": "5xx errors"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "5xx errors" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.fillOpacity", "value": 20 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "HTTP Latency p95 / p99",
+          "type": "timeseries",
+          "id": 7,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "catalog-api p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "catalog-api p99"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "order-api p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "order-api p99"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" }
+          }
+        },
+        {
+          "title": "DB Query Latency",
+          "type": "timeseries",
+          "id": 8,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(db_query_duration_seconds_bucket{job=\"catalog-api\"}[5m])) by (le))",
+              "legendFormat": "catalog-api p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket{job=\"catalog-api\"}[5m])) by (le))",
+              "legendFormat": "catalog-api p95"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(db_query_duration_seconds_bucket{job=\"order-api\"}[5m])) by (le))",
+              "legendFormat": "order-api p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket{job=\"order-api\"}[5m])) by (le))",
+              "legendFormat": "order-api p95"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" }
+          }
+        },
+        {
+          "title": "Requests by Status Code",
+          "type": "timeseries",
+          "id": 9,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (job, status) (rate(http_requests_total{job=~\"catalog-api|order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "{{ job }} {{ status }}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" }
+          }
+        },
+        {
+          "title": "Active DB Connections",
+          "type": "timeseries",
+          "id": 10,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "active_db_connections{job=\"catalog-api\"}",
+              "legendFormat": "catalog-api {{ pod }}"
+            },
+            {
+              "expr": "active_db_connections{job=\"order-api\"}",
+              "legendFormat": "order-api {{ pod }}"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 39
+    }

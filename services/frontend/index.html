@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookshop — SRE Practice</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: #1e293b; }
+    .header { background: #0a1628; color: white; padding: 2rem; }
+    .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    .header p { color: #8899aa; }
+    .container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .card h2 { color: #0a1628; margin-bottom: 1rem; font-size: 1.2rem; }
+    .status { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.85rem; font-weight: 600; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.err { background: #fecaca; color: #991b1b; }
+    .status.loading { background: #e0f2fe; color: #0369a1; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .book { padding: 1rem; border: 1px solid #e2e8f0; border-radius: 6px; }
+    .book .title { font-weight: 600; margin-bottom: 0.25rem; }
+    .book .author { color: #64748b; font-size: 0.9rem; }
+    .book .price { color: #0891b2; font-weight: 600; margin-top: 0.5rem; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+    .metric { text-align: center; padding: 1rem; }
+    .metric .value { font-size: 2rem; font-weight: 700; color: #0891b2; }
+    .metric .label { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    button { background: #0891b2; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+    button:hover { background: #0e7490; }
+    .api-section { margin-top: 1rem; }
+    pre { background: #0a1628; color: #48cae4; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📚 Bookshop</h1>
+    <p>SRE Practice — System Cartography, Deploy & SLO</p>
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2>Статус сервисов</h2>
+      <div class="metrics">
+        <div class="metric">
+          <div id="frontend-status" class="status loading">checking...</div>
+          <div class="label">frontend</div>
+        </div>
+        <div class="metric">
+          <div id="catalog-status" class="status loading">checking...</div>
+          <div class="label">catalog-api</div>
+        </div>
+        <div class="metric">
+          <div id="order-status" class="status loading">checking...</div>
+          <div class="label">order-api</div>
+        </div>
+        <div class="metric">
+          <div id="db-status" class="status loading">checking...</div>
+          <div class="label">postgres (via API)</div>
+        </div>
+      </div>
+      <button onclick="checkHealth()">Проверить здоровье</button>
+    </div>
+
+    <div class="card">
+      <h2>Каталог книг</h2>
+      <button onclick="loadBooks()">Загрузить каталог</button>
+      <div id="books" class="grid" style="margin-top: 1rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2>API Endpoints</h2>
+      <div class="api-section">
+        <pre>GET  /api/books          — список книг (catalog-api)
+GET  /api/books/{id}     — книга по ID
+GET  /api/books/search?q= — поиск
+GET  /api/orders         — список заказов (order-api)
+POST /api/orders         — создание заказа
+GET  /healthz            — liveness probe
+GET  /ready              — readiness probe</pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function checkHealth() {
+      const checks = [
+        { id: 'frontend-status', url: '/healthz' },
+        { id: 'catalog-status', url: '/api/books' },
+        { id: 'order-status', url: '/api/orders' },
+        { id: 'db-status', url: '/api/books' },
+      ];
+      for (const check of checks) {
+        const el = document.getElementById(check.id);
+        el.className = 'status loading';
+        el.textContent = 'checking...';
+        try {
+          const start = performance.now();
+          const resp = await fetch(check.url);
+          const ms = Math.round(performance.now() - start);
+          if (resp.ok) {
+            el.className = 'status ok';
+            el.textContent = `OK (${ms}ms)`;
+          } else {
+            el.className = 'status err';
+            el.textContent = `${resp.status}`;
+          }
+        } catch (e) {
+          el.className = 'status err';
+          el.textContent = 'error';
+        }
+      }
+    }
+
+    async function loadBooks() {
+      const container = document.getElementById('books');
+      try {
+        const resp = await fetch('/api/books');
+        const data = await resp.json();
+        container.innerHTML = data.books.map(b => `
+          <div class="book">
+            <div class="title">${b.title}</div>
+            <div class="author">${b.author}</div>
+            <div class="price">$${Number(b.price).toFixed(2)}</div>
+            <div class="author">Stock: ${b.stock}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<p style="color:#991b1b;">Ошибка загрузки каталога</p>';
+      }
+    }
+
+    // Auto-check on load
+    checkHealth();
+  </script>
+</body>
+</html>

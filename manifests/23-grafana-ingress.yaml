@@ -1,0 +1,24 @@
+# =============================================================================
+# Ingress — Grafana UI
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana-ingress
+    app.kubernetes.io/part-of: bookshop
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: grafana.bookshop.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-stack-grafana
+                port:
+                  number: 80

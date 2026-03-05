@@ -1,0 +1,184 @@
+# =============================================================================
+# order-api — Deployment + Service + HPA + PDB
+# SLO: 99.95% availability (строже, т.к. обрабатывает заказы/деньги)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: order-api
+    app.kubernetes.io/part-of: bookshop
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    slo.bookshop/type: "availability"
+    slo.bookshop/target: "99.95"
+    slo.bookshop/owner: "backend-team"
+    # Более строгий SLO — order-api обрабатывает финансовые операции
+    slo.bookshop/criticality: "high"
+spec:
+  replicas: 3  # Больше реплик, чем у catalog-api, из-за критичности
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-api
+        app.kubernetes.io/part-of: bookshop
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      terminationGracePeriodSeconds: 45
+      # Anti-affinity — не размещать 2 пода на одном узле
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values: ["order-api"]
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: order-api
+      containers:
+        - name: order-api
+          image: akulovnv/bookshop-order-api:v1.0.4
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: DATABASE_URL
+            - name: SERVICE_NAME
+              value: "order-api"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://tempo.monitoring:4317"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 150m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes: []
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: order-api
+    app.kubernetes.io/part-of: bookshop
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: order-api
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: order-api
+    app.kubernetes.io/part-of: bookshop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-api
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60  # Строже, чем у catalog-api
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 15  # Быстрее реагируем на нагрузку
+      policies:
+        - type: Pods
+          value: 3
+          periodSeconds: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-api-pdb
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: order-api
+    app.kubernetes.io/part-of: bookshop
+spec:
+  minAvailable: 2  # Всегда минимум 2 пода для high-criticality сервиса
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-api

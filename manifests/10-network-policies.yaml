@@ -1,0 +1,134 @@
+# =============================================================================
+# NetworkPolicy — изоляция сетевого доступа между компонентами
+# Принцип: deny-by-default + whitelist нужных соединений
+# =============================================================================
+
+# --- Default Deny: запрещаем весь ingress-трафик в namespace ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# --- Frontend: принимает трафик от Ingress Controller ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # От Ingress Controller (обычно в namespace ingress-nginx)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+    # Для port-forward при разработке
+    - ports:
+        - protocol: TCP
+          port: 80
+
+---
+# --- catalog-api: принимает трафик только от frontend ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-catalog-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# --- order-api: принимает трафик только от frontend ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-order-api
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: order-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# --- PostgreSQL: принимает трафик только от catalog-api и order-api ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 5432

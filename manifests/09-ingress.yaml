@@ -1,0 +1,41 @@
+# =============================================================================
+# Ingress — внешний доступ к приложению
+# Поддерживает как nginx-ingress, так и GKE Ingress
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bookshop-ingress
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/name: bookshop-ingress
+    app.kubernetes.io/part-of: bookshop
+  annotations:
+    # Для nginx-ingress
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    # Rate limiting — защита от перегрузки
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+    # Сжатие
+    nginx.ingress.kubernetes.io/enable-gzip: "true"
+spec:
+  ingressClassName: nginx  # Изменить при использовании другого контроллера
+  rules:
+    - host: bookshop.local  # Изменить на реальный домен
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+  # Раскомментируйте для TLS
+  # tls:
+  #   - hosts:
+  #       - bookshop.local
+  #     secretName: bookshop-tls
