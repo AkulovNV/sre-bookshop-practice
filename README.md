@@ -74,9 +74,9 @@ manifests/
 └── 11-monitoring.yaml         # ServiceMonitor / PrometheusRule (SLO)
 ```
 
-## Сценарий практики (15 мин)
+## Сценарий практики
 
-### Шаг 1. Картография (3 мин)
+### Шаг 1. Картография
 ```bash
 # Запустить скрипт инвентаризации
 bash scripts/01-cartography.sh
@@ -88,12 +88,9 @@ bash scripts/01-cartography.sh
 bash scripts/02-deploy.sh
 ```
 
-### Шаг 3. Определение SLO (5 мин)
+### Шаг 3. Определение SLO 
 ```bash
 # Посмотреть SLO-шаблон и Prometheus rules
 cat docs/slo-template.md
 cat manifests/11-monitoring.yaml
 ```
-
-### Шаг 4. Обсуждение (2 мин)
-Открытые вопросы — см. `docs/discussion-questions.md`
