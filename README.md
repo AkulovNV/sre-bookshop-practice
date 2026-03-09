@@ -82,7 +82,7 @@ manifests/
 bash scripts/01-cartography.sh
 ```
 
-### Шаг 2. Деплой (5 мин)
+### Шаг 2. Деплой
 ```bash
 # Запустить деплой и проверку
 bash scripts/02-deploy.sh
