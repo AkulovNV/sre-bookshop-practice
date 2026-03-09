@@ -7,6 +7,7 @@
 set -euo pipefail
 
 NS="bookshop"
+NS_INGRESS="ingress-nginx"
 MANIFEST_DIR="$(dirname "$0")/../manifests"
 BOLD='\033[1m'
 CYAN='\033[0;36m'
@@ -84,24 +85,55 @@ echo -e "${GREEN}✓ Frontend готов${NC}"
 echo ""
 
 # ---------------------------------------------------------------------------
-# 2.7 Ingress и NetworkPolicies
+# 2.7 Установка Ingress Controller
 # ---------------------------------------------------------------------------
-echo -e "${CYAN}▶ 2.7 Настройка Ingress и NetworkPolicy${NC}"
-kubectl apply -f ${MANIFEST_DIR}/09-ingress.yaml
-kubectl apply -f ${MANIFEST_DIR}/10-network-policies.yaml
-echo -e "${GREEN}✓ Ingress и NetworkPolicy применены${NC}"
+HELM_VALUES_DIR="$(dirname "$0")/../helm-values"
+
+echo -e "${CYAN}▶ 2.7 Установка ingress-nginx${NC}"
+if kubectl get ingressclass nginx &>/dev/null; then
+  echo -e "${GREEN}✓ ingress-nginx уже установлен${NC}"
+else
+  helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
+  helm repo update
+  helm upgrade --install ingress-nginx \
+    ingress-nginx/ingress-nginx \
+    --namespace ${NS_INGRESS} \
+    --create-namespace \
+    --values ${HELM_VALUES_DIR}/ingress-nginx.yaml \
+    --wait \
+    --timeout 5m
+  echo -e "${GREEN}✓ ingress-nginx установлен${NC}"
+fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 2.8 Мониторинг (опционально)
+# 2.8 Ingress и NetworkPolicies
 # ---------------------------------------------------------------------------
-echo -e "${CYAN}▶ 2.8 Мониторинг (ServiceMonitor + PrometheusRule)${NC}"
+echo -e "${CYAN}▶ 2.8 Настройка Ingress и NetworkPolicy${NC}"
+kubectl apply -f ${MANIFEST_DIR}/09-ingress.yaml
+kubectl apply -f ${MANIFEST_DIR}/10-network-policies.yaml
+echo -e "${GREEN}✓ Bookshop Ingress и NetworkPolicy применены${NC}"
+
+# Ингрессы мониторинга (если namespace monitoring уже существует)
+if kubectl get namespace monitoring &>/dev/null; then
+  kubectl apply -f ${MANIFEST_DIR}/23-monitoring-ingress.yaml
+  echo -e "${GREEN}✓ Ingress мониторинга применены:${NC}"
+  echo -e "  grafana.bookshop.local      → Grafana (admin/admin)"
+  echo -e "  prometheus.bookshop.local    → Prometheus"
+  echo -e "  alertmanager.bookshop.local  → Alertmanager"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
+# 2.9 Мониторинг (опционально)
+# ---------------------------------------------------------------------------
+echo -e "${CYAN}▶ 2.9 Мониторинг (ServiceMonitor + PrometheusRule)${NC}"
 if kubectl api-resources | grep -q servicemonitors 2>/dev/null; then
   kubectl apply -f ${MANIFEST_DIR}/11-monitoring.yaml
   echo -e "${GREEN}✓ ServiceMonitor и PrometheusRule созданы${NC}"
 else
   echo -e "${YELLOW}⚠ Prometheus Operator не обнаружен — мониторинг-манифесты пропущены${NC}"
-  echo "  Для установки: helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack"
+  echo "  Для установки: bash scripts/04-install-monitoring.sh"
 fi
 echo ""
 
@@ -128,18 +160,23 @@ echo ""
 # ---------------------------------------------------------------------------
 # Доступ
 # ---------------------------------------------------------------------------
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "<pending>")
+
 echo -e "${BOLD}▶ Доступ к приложению:${NC}"
 echo ""
-echo "  # Port-forward (быстрый доступ):"
-echo "  kubectl port-forward svc/frontend 8080:80 -n ${NS}"
-echo "  # Затем откройте: http://localhost:8080"
+echo -e "  External IP: ${BOLD}${EXTERNAL_IP}${NC}"
 echo ""
-echo "  # Проверка API:"
-echo "  kubectl port-forward svc/catalog-api 8081:8080 -n ${NS}"
-echo "  curl http://localhost:8081/books"
-echo "  curl http://localhost:8081/books/search?q=SRE"
+echo "  Добавьте в /etc/hosts (если ещё не добавлено):"
+echo "  ${EXTERNAL_IP}  bookshop.local grafana.bookshop.local prometheus.bookshop.local alertmanager.bookshop.local"
 echo ""
-echo "  # Проверка health:"
-echo "  curl http://localhost:8081/healthz"
-echo "  curl http://localhost:8081/ready"
-echo "  curl http://localhost:8081/metrics"
+echo "  Приложение:  http://bookshop.local"
+echo ""
+echo "  Проверка API:"
+echo "  curl -H 'Host: bookshop.local' http://${EXTERNAL_IP}/api/books"
+echo "  curl -H 'Host: bookshop.local' http://${EXTERNAL_IP}/api/orders"
+echo "  curl -H 'Host: bookshop.local' 'http://${EXTERNAL_IP}/api/books/search?q=SRE'"
+echo ""
+
+echo -e "${BOLD}▶ Следующий шаг:${NC}"
+echo "  bash scripts/03-check-slo.sh        — проверка SLI/SLO"
+echo "  bash scripts/04-install-monitoring.sh — установка стека мониторинга"
