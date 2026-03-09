@@ -11,6 +11,7 @@ data:
     datasources:
       - name: Tempo
         type: tempo
+        uid: tempo
         access: proxy
         url: http://tempo.monitoring:3200
         isDefault: false
@@ -26,3 +27,14 @@ data:
             datasourceUid: prometheus
           nodeGraph:
             enabled: true
+          tracesToLogs:
+            datasourceUid: loki
+            spanStartTimeShift: '-1h'
+            spanEndTimeShift: '1h'
+            filterByTraceID: true
+            filterBySpanID: false
+            tags:
+              - key: service.name
+                value: service_name
+          lokiSearch:
+            datasourceUid: loki

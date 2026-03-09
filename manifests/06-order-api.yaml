@@ -61,7 +61,7 @@ spec:
               app.kubernetes.io/name: order-api
       containers:
         - name: order-api
-          image: akulovnv/bookshop-order-api:v1.0.4
+          image: akulovnv/bookshop-order-api:v1.3.0
           ports:
             - containerPort: 8080
               name: http

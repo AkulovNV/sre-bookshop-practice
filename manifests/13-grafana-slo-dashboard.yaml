@@ -1,0 +1,442 @@
+# =============================================================================
+# Grafana Dashboard — Bookshop SLO Overview
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bookshop-slo-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  bookshop-slo.json: |
+    {
+      "title": "Bookshop — SLO Overview",
+      "tags": ["bookshop", "slo", "sre"],
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "slo_window",
+            "type": "custom",
+            "current": { "text": "30d", "value": "30d" },
+            "options": [
+              { "text": "1h", "value": "1h", "selected": false },
+              { "text": "6h", "value": "6h", "selected": false },
+              { "text": "1d", "value": "1d", "selected": false },
+              { "text": "7d", "value": "7d", "selected": false },
+              { "text": "30d", "value": "30d", "selected": true }
+            ]
+          }
+        ]
+      },
+      "panels": [
+        {
+          "title": "SLO Status",
+          "type": "row",
+          "id": 100,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false
+        },
+        {
+          "title": "catalog-api — Availability",
+          "description": "SLO: 99.5% | Error Budget: 0.5%",
+          "type": "gauge",
+          "id": 1,
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", status!~\"5..\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) * 100",
+              "legendFormat": "Availability %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99, "color": "orange" },
+                  { "value": 99.5, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "catalog-api — Latency (p95 < 300ms)",
+          "description": "SLO: 99.5% запросов быстрее 300ms",
+          "type": "gauge",
+          "id": 2,
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", le=\"0.3\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_request_duration_seconds_count{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) * 100",
+              "legendFormat": "% requests < 300ms"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99, "color": "orange" },
+                  { "value": 99.5, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "order-api — Availability",
+          "description": "SLO: 99.95% | Error Budget: 0.05%",
+          "type": "gauge",
+          "id": 3,
+          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=\"order-api\", status!~\"5..\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) * 100",
+              "legendFormat": "Availability %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99.5, "color": "orange" },
+                  { "value": 99.95, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "order-api — Latency (p95 < 500ms)",
+          "description": "SLO: 99.95% запросов быстрее 500ms",
+          "type": "gauge",
+          "id": 4,
+          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", le=\"0.5\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_request_duration_seconds_count{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) * 100",
+              "legendFormat": "% requests < 500ms"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 95, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 99.5, "color": "orange" },
+                  { "value": 99.95, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Error Budget",
+          "type": "row",
+          "id": 101,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+          "collapsed": false
+        },
+        {
+          "title": "catalog-api — Error Budget Remaining",
+          "description": "SLO 99.5% (30d window). Budget = 0.5% = 3.6 часа",
+          "type": "gauge",
+          "id": 5,
+          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "clamp_min(bookshop:catalog_api:error_budget_remaining:ratio * 100, 0)",
+              "legendFormat": "Error Budget %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 20, "color": "orange" },
+                  { "value": 50, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "order-api — Error Budget Remaining",
+          "description": "SLO 99.95% (30d window). Budget = 0.05% = 21.6 мин",
+          "type": "gauge",
+          "id": 6,
+          "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "clamp_min(bookshop:order_api:error_budget_remaining:ratio * 100, 0)",
+              "legendFormat": "Error Budget %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "min": 0, "max": 100,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "red" },
+                  { "value": 20, "color": "orange" },
+                  { "value": 50, "color": "green" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Active Alerts",
+          "type": "stat",
+          "id": 7,
+          "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "count(ALERTS{alertstate=\"firing\", namespace=\"bookshop\"}) or vector(0)",
+              "legendFormat": "Firing alerts"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "green" },
+                  { "value": 1, "color": "red" }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Burn Rate & Error Rate",
+          "type": "row",
+          "id": 102,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+          "collapsed": false
+        },
+        {
+          "title": "catalog-api — Error Rate vs SLO Threshold",
+          "type": "timeseries",
+          "id": 8,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "(1 - sum(rate(http_requests_total{job=\"catalog-api\", status!~\"5..\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))) * 100",
+              "legendFormat": "Error Rate %"
+            },
+            {
+              "expr": "0.5",
+              "legendFormat": "SLO threshold (0.5%)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "percent", "min": 0 },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO threshold (0.5%)" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "order-api — Error Rate vs SLO Threshold",
+          "type": "timeseries",
+          "id": 9,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "(1 - sum(rate(http_requests_total{job=\"order-api\", status!~\"5..\", endpoint!~\"healthz|ready|metrics\"}[5m])) / sum(rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))) * 100",
+              "legendFormat": "Error Rate %"
+            },
+            {
+              "expr": "0.05",
+              "legendFormat": "SLO threshold (0.05%)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "percent", "min": 0 },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO threshold (0.05%)" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "Latency & Throughput",
+          "type": "row",
+          "id": 103,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "collapsed": false
+        },
+        {
+          "title": "catalog-api — Latency Distribution",
+          "type": "timeseries",
+          "id": 10,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p99"
+            },
+            {
+              "expr": "0.3",
+              "legendFormat": "SLO (300ms)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO (300ms)" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "order-api — Latency Distribution",
+          "type": "timeseries",
+          "id": 11,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "legendFormat": "p99"
+            },
+            {
+              "expr": "0.5",
+              "legendFormat": "SLO (500ms)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "SLO (500ms)" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "title": "Throughput (RPS)",
+          "type": "timeseries",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "catalog-api"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "legendFormat": "order-api"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" }
+          }
+        },
+        {
+          "title": "Orders Created",
+          "type": "timeseries",
+          "id": 13,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(orders_created_total{job=\"order-api\", status=\"success\"}[5m]))",
+              "legendFormat": "success"
+            },
+            {
+              "expr": "sum(rate(orders_created_total{job=\"order-api\", status=\"error\"}[5m]))",
+              "legendFormat": "error"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "error" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "schemaVersion": 39
+    }

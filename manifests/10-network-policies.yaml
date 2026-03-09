@@ -110,6 +110,47 @@ spec:
           port: 8080
 
 ---
+# --- Backend Egress: разрешаем отправку трейсов в Tempo (monitoring namespace) ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-egress-tempo
+  namespace: bookshop
+  labels:
+    app.kubernetes.io/part-of: bookshop
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # PostgreSQL (внутри namespace)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Tempo OTLP gRPC (в namespace monitoring)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+
+---
 # --- PostgreSQL: принимает трафик только от catalog-api и order-api ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

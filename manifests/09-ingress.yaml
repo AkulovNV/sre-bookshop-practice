@@ -12,7 +12,6 @@ metadata:
     app.kubernetes.io/part-of: bookshop
   annotations:
     # Для nginx-ingress
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "30"

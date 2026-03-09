@@ -48,7 +48,7 @@ spec:
               app.kubernetes.io/name: frontend
       containers:
         - name: nginx
-          image: akulovnv/bookshop-frontend:v1.0.1
+          image: akulovnv/bookshop-frontend:v1.1.1
           ports:
             - containerPort: 80
               name: http

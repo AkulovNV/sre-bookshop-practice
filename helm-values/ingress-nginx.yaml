@@ -1,0 +1,21 @@
+# =============================================================================
+# ingress-nginx — Helm values
+# Ingress Controller для маршрутизации внешнего трафика
+# =============================================================================
+
+controller:
+  # Yandex Cloud: LoadBalancer создаёт Network Load Balancer
+  service:
+    type: LoadBalancer
+  # Метрики для Prometheus
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Включить после установки kube-prometheus-stack
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

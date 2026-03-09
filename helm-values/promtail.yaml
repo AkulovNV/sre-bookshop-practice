@@ -1,0 +1,35 @@
+# =============================================================================
+# Promtail — Helm values
+# Сбор логов с подов Kubernetes и отправка в Loki
+# =============================================================================
+
+config:
+  clients:
+    - url: http://loki.monitoring:3100/loki/api/v1/push
+
+  # Pipeline stages для извлечения полей из JSON-логов
+  snippets:
+    pipelineStages:
+      - cri: {}
+      # Парсим JSON-логи (app.logger); non-JSON строки (gunicorn access) пропускаются
+      - json:
+          expressions:
+            level: level
+            service: service
+            trace_id: traceID
+      # Добавляем low-cardinality лейблы для фильтрации
+      - labels:
+          level:
+          service:
+      # traceID НЕ делаем лейблом (high cardinality),
+      # оставляем в structured metadata для поиска через |= "traceID"
+      - structured_metadata:
+          trace_id:
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

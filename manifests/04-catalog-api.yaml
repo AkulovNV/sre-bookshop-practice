@@ -55,7 +55,7 @@ spec:
               app.kubernetes.io/name: catalog-api
       containers:
         - name: catalog-api
-          image: akulovnv/bookshop-catalog-api:v1.0.4
+          image: akulovnv/bookshop-catalog-api:v1.3.0
           ports:
             - containerPort: 8080
               name: http

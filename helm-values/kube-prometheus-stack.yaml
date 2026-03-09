@@ -1,0 +1,59 @@
+# =============================================================================
+# kube-prometheus-stack — Helm values
+# Prometheus + Grafana + Alertmanager + node-exporter + kube-state-metrics
+# =============================================================================
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    # Включаем приём remote write от Tempo Metrics Generator
+    enableRemoteWriteReceiver: true
+    # Собираем ServiceMonitor из всех namespace (включая bookshop)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    # Собираем PrometheusRule из всех namespace
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+    # Retention
+    retention: 7d
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+
+# --- Grafana ---
+grafana:
+  adminUser: admin
+  adminPassword: admin
+  persistence:
+    enabled: true
+    size: 1Gi
+  # Override образа sidecar: quay.io может быть недоступен из РФ
+  sidecar:
+    image:
+      registry: docker.io
+      repository: kiwigrid/k8s-sidecar
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      searchNamespace: ALL
+  # Дополнительные datasources (Tempo добавляется через ConfigMap 22-)
+  additionalDataSources: []
+
+# --- Alertmanager ---
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi

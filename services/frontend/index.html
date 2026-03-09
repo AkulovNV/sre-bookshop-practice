@@ -22,6 +22,16 @@
     .book .title { font-weight: 600; margin-bottom: 0.25rem; }
     .book .author { color: #64748b; font-size: 0.9rem; }
     .book .price { color: #0891b2; font-weight: 600; margin-top: 0.5rem; }
+    .book .stock { color: #64748b; font-size: 0.85rem; }
+    .book button { margin-top: 0.5rem; width: 100%; padding: 0.4rem; font-size: 0.8rem; }
+    .book button:disabled { background: #94a3b8; cursor: not-allowed; }
+    .order-item { padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .order-item .order-id { font-weight: 600; color: #0891b2; }
+    .order-item .order-info { color: #64748b; font-size: 0.85rem; }
+    .order-item .order-total { font-weight: 600; }
+    .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1.5rem; border-radius: 6px; color: white; font-weight: 600; z-index: 100; transition: opacity 0.3s; }
+    .toast.success { background: #166534; }
+    .toast.error { background: #991b1b; }
     .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
     .metric { text-align: center; padding: 1rem; }
     .metric .value { font-size: 2rem; font-weight: 700; color: #0891b2; }
@@ -35,7 +45,7 @@
 <body>
   <div class="header">
     <h1>📚 Bookshop</h1>
-    <p>SRE Practice — System Cartography, Deploy & SLO</p>
+    <p>SRE Practice — Observability, Monitoring & Tracing</p>
   </div>
   <div class="container">
     <div class="card">
@@ -65,6 +75,12 @@
       <h2>Каталог книг</h2>
       <button onclick="loadBooks()">Загрузить каталог</button>
       <div id="books" class="grid" style="margin-top: 1rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Заказы</h2>
+      <button id="btn-orders" onclick="loadOrders()">Загрузить заказы</button>
+      <div id="orders" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;"></div>
     </div>
 
     <div class="card">
@@ -117,16 +133,84 @@ GET  /ready              — readiness probe</pre>
         const resp = await fetch('/api/books');
         const data = await resp.json();
         container.innerHTML = data.books.map(b => `
-          <div class="book">
+          <div class="book" id="book-${b.id}">
             <div class="title">${b.title}</div>
             <div class="author">${b.author}</div>
             <div class="price">$${Number(b.price).toFixed(2)}</div>
-            <div class="author">Stock: ${b.stock}</div>
+            <div class="stock">Stock: <span id="stock-${b.id}">${b.stock}</span></div>
+            <button onclick="orderBook(${b.id}, '${b.title}')" ${b.stock <= 0 ? 'disabled' : ''}>
+              Заказать
+            </button>
           </div>
         `).join('');
       } catch (e) {
         container.innerHTML = '<p style="color:#991b1b;">Ошибка загрузки каталога</p>';
       }
+    }
+
+    async function orderBook(bookId, title) {
+      try {
+        const resp = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer: 'web-user', items: [{ book_id: bookId, quantity: 1 }] })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          showToast(`Заказ #${data.order.id} создан — $${Number(data.order.total).toFixed(2)}`, 'success');
+          // Обновить stock на странице
+          const stockEl = document.getElementById(`stock-${bookId}`);
+          if (stockEl) {
+            const newStock = parseInt(stockEl.textContent) - 1;
+            stockEl.textContent = newStock;
+            if (newStock <= 0) {
+              const btn = document.querySelector(`#book-${bookId} button`);
+              if (btn) btn.disabled = true;
+            }
+          }
+          loadOrders();
+        } else {
+          showToast(`Ошибка: ${data.message || data.error}`, 'error');
+        }
+      } catch (e) {
+        showToast('Ошибка сети при создании заказа', 'error');
+      }
+    }
+
+    async function loadOrders() {
+      const container = document.getElementById('orders');
+      const btn = document.getElementById('btn-orders');
+      if (btn) { btn.disabled = true; btn.textContent = 'Загрузка...'; }
+      try {
+        const resp = await fetch('/api/orders');
+        const data = await resp.json();
+        if (!data.orders || data.orders.length === 0) {
+          container.innerHTML = '<p style="color:#64748b;">Заказов пока нет</p>';
+          return;
+        }
+        container.innerHTML = data.orders.map(o => `
+          <div class="order-item">
+            <div>
+              <div class="order-id">Заказ #${o.id}</div>
+              <div class="order-info">${o.customer} — ${o.status}</div>
+            </div>
+            <div class="order-total">$${Number(o.total).toFixed(2)}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = '<p style="color:#991b1b;">Ошибка загрузки заказов</p>';
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Загрузить заказы'; }
+      }
+    }
+
+    function showToast(message, type) {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+      setTimeout(() => { toast.remove(); }, 3000);
     }
 
     // Auto-check on load

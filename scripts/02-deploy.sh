@@ -57,7 +57,6 @@ echo ""
 # 2.4 catalog-api
 # ---------------------------------------------------------------------------
 echo -e "${CYAN}▶ 2.4 Деплой catalog-api${NC}"
-kubectl apply -f ${MANIFEST_DIR}/03-catalog-api-config.yaml
 kubectl apply -f ${MANIFEST_DIR}/04-catalog-api.yaml
 echo "Ожидание готовности catalog-api..."
 kubectl rollout status deploy/catalog-api -n ${NS} --timeout=300s
@@ -68,7 +67,6 @@ echo ""
 # 2.5 order-api
 # ---------------------------------------------------------------------------
 echo -e "${CYAN}▶ 2.5 Деплой order-api${NC}"
-kubectl apply -f ${MANIFEST_DIR}/05-order-api-config.yaml
 kubectl apply -f ${MANIFEST_DIR}/06-order-api.yaml
 echo "Ожидание готовности order-api..."
 kubectl rollout status deploy/order-api -n ${NS} --timeout=300s
@@ -79,7 +77,6 @@ echo ""
 # 2.6 Frontend
 # ---------------------------------------------------------------------------
 echo -e "${CYAN}▶ 2.6 Деплой frontend${NC}"
-kubectl apply -f ${MANIFEST_DIR}/07-frontend-config.yaml
 kubectl apply -f ${MANIFEST_DIR}/08-frontend.yaml
 echo "Ожидание готовности frontend..."
 kubectl rollout status deploy/frontend -n ${NS} --timeout=120s

@@ -13,7 +13,7 @@ CMD ["gunicorn", "--bind", "0.0.0.0:8080", \
      "--workers", "2", \
      "--threads", "2", \
      "--timeout", "30", \
-     "--access-logfile", "-", \
+     "--access-logfile", "/dev/null", \
      "--error-logfile", "-", \
-     "--log-level", "info", \
+     "--log-level", "warning", \
      "app:app"]

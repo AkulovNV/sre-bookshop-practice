@@ -12,6 +12,7 @@ Endpoints:
 import os
 import time
 import logging
+import json
 from functools import wraps
 
 from flask import Flask, jsonify, request, g
@@ -53,10 +54,33 @@ Psycopg2Instrumentor().instrument()
 # Конфигурация
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
+
+# ---------------------------------------------------------------------------
+# Structured JSON logging с TraceID для корреляции с Loki
+# ---------------------------------------------------------------------------
+class TraceIDFormatter(logging.Formatter):
+    def format(self, record):
+        span = trace.get_current_span()
+        ctx = span.get_span_context() if span else None
+        trace_id = format(ctx.trace_id, '032x') if ctx and ctx.trace_id else ""
+        span_id = format(ctx.span_id, '016x') if ctx and ctx.span_id else ""
+        log = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "service": SERVICE_NAME,
+            "traceID": trace_id,
+            "spanID": span_id,
+        }
+        return json.dumps(log)
+
+handler = logging.StreamHandler()
+handler.setFormatter(TraceIDFormatter())
+app.logger.handlers = [handler]
 app.logger.setLevel(logging.INFO)
 
 # Instrument Flask
-FlaskInstrumentor().instrument_app(app)
+FlaskInstrumentor().instrument_app(app, excluded_urls="healthz,ready,metrics")
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -148,6 +172,12 @@ def after_request(response):
             endpoint=endpoint,
             status=response.status_code
         ).inc()
+        # Structured log для корреляции с трейсами (исключаем probes и metrics)
+        if endpoint not in ("healthz", "ready", "metrics"):
+            app.logger.info(
+                "%s %s %s %.3fs",
+                request.method, request.path, response.status_code, duration
+            )
     IN_PROGRESS.dec()
     return response
 
