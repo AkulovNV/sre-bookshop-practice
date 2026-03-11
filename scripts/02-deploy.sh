@@ -90,7 +90,7 @@ echo ""
 HELM_VALUES_DIR="$(dirname "$0")/../helm-values"
 
 echo -e "${CYAN}▶ 2.7 Установка ingress-nginx${NC}"
-if kubectl get ingressclass nginx &>/dev/null; then
+if helm status ingress-nginx -n ${NS_INGRESS} &>/dev/null; then
   echo -e "${GREEN}✓ ingress-nginx уже установлен${NC}"
 else
   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
