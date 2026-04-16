@@ -55,7 +55,8 @@ spec:
               app.kubernetes.io/name: catalog-api
       containers:
         - name: catalog-api
-          image: akulovnv/bookshop-catalog-api:v1.3.0
+          image: akulovnv/bookshop-catalog-api:v1.4.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
@@ -70,6 +71,15 @@ spec:
               value: "catalog-api"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://tempo.monitoring:4317"
+            # Chaos Engineering — симуляция ошибок для демонстрации SRE
+            - name: CHAOS_ERROR_RATE
+              value: "0.05"
+            - name: CHAOS_SLOW_RATE
+              value: "0.10"
+            - name: CHAOS_SLOW_MIN_MS
+              value: "500"
+            - name: CHAOS_SLOW_MAX_MS
+              value: "2000"
             # Inject pod metadata для логов и трейсов
             - name: POD_NAME
               valueFrom:

@@ -52,23 +52,30 @@ echo -e "${CYAN}▶ 5.2 Проверка доступности через Ingre
 
 EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 
-if [[ -z "$EXTERNAL_IP" ]]; then
-  echo -e "${RED}✗ Ingress Controller не найден или External IP не назначен${NC}"
-  echo "  Установите: bash scripts/04-install-monitoring.sh"
-  exit 1
+# Colima с VZ driver не маршрутизирует IP VM на хост — используем localhost
+if [[ -z "$EXTERNAL_IP" ]] || ! curl -sf --connect-timeout 2 -H 'Host: bookshop.local' "http://${EXTERNAL_IP}/" > /dev/null 2>&1; then
+  EXTERNAL_IP="127.0.0.1"
 fi
 
-echo "  External IP: ${EXTERNAL_IP}"
+echo "  Ingress IP: ${EXTERNAL_IP}"
 echo "  Проверяем доступность bookshop.local..."
 
 # Используем --resolve для обхода DNS (если /etc/hosts не настроен)
 CURL_RESOLVE="--resolve bookshop.local:80:${EXTERNAL_IP}"
 
-if curl -sf ${CURL_RESOLVE} ${BASE_URL}/api/books > /dev/null 2>&1; then
+REACHABLE=false
+for attempt in 1 2 3; do
+  if curl -sf --connect-timeout 3 ${CURL_RESOLVE} ${BASE_URL}/api/books > /dev/null 2>&1; then
+    REACHABLE=true
+    break
+  fi
+  sleep 1
+done
+if $REACHABLE; then
   echo -e "${GREEN}✓ Bookshop API доступен через Ingress${NC}"
 else
-  echo -e "${YELLOW}⚠ bookshop.local недоступен — проверьте /etc/hosts или Ingress${NC}"
-  echo "  Попробуйте: echo '${EXTERNAL_IP}  bookshop.local' | sudo tee -a /etc/hosts"
+  echo -e "${YELLOW}⚠ bookshop.local недоступен — проверьте Ingress Controller${NC}"
+  echo "  Попробуйте: kubectl get pods -n ingress-nginx"
   exit 1
 fi
 echo ""
@@ -78,49 +85,41 @@ echo ""
 # ---------------------------------------------------------------------------
 echo -e "${CYAN}▶ 5.3 Генерация трафика на catalog-api${NC}"
 
-echo "  → GET /api/books (50 запросов)..."
-SUCCESS=0
-FAIL=0
-for i in $(seq 1 50); do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} ${BASE_URL}/api/books)
-  if [[ "$STATUS" == "200" ]]; then
-    ((SUCCESS++))
+# Вспомогательная функция: отправить N запросов, подсчитать результаты
+send_requests() {
+  local URL="$1" COUNT="$2" LABEL="$3"
+  local OK=0 ERRORS=0
+  for i in $(seq 1 ${COUNT}); do
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${URL}")
+    if [[ "$STATUS" =~ ^2 ]]; then ((OK++)); else ((ERRORS++)); fi
+  done
+  if [[ "$ERRORS" -gt 0 ]]; then
+    echo -e "    ${YELLOW}${LABEL}: ${OK} ok, ${ERRORS} errors (из ${COUNT})${NC}"
   else
-    ((FAIL++))
+    echo -e "    ${GREEN}✓ ${LABEL}: ${OK}/${COUNT} ok${NC}"
   fi
-done
-echo -e "    ${GREEN}✓ Успешных: ${SUCCESS}, Ошибок: ${FAIL}${NC}"
+}
 
-echo "  → GET /api/books/<id> (книги 1-8, по 5 раз)..."
-SUCCESS=0
-FAIL=0
+echo "  → GET /api/books (100 запросов)..."
+send_requests "${BASE_URL}/api/books" 100 "/api/books"
+
+echo "  → GET /api/books/<id> (книги 1-8, по 5 раз = 40)..."
+OK=0; ERRORS=0
 for book_id in $(seq 1 8); do
   for _ in $(seq 1 5); do
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${BASE_URL}/api/books/${book_id}")
-    if [[ "$STATUS" == "200" ]]; then
-      ((SUCCESS++))
-    else
-      ((FAIL++))
-    fi
+    if [[ "$STATUS" =~ ^2 ]]; then ((OK++)); else ((ERRORS++)); fi
   done
 done
-echo -e "    ${GREEN}✓ Успешных: ${SUCCESS}, Ошибок: ${FAIL}${NC}"
+if [[ "$ERRORS" -gt 0 ]]; then
+  echo -e "    ${YELLOW}/api/books/<id>: ${OK} ok, ${ERRORS} errors (из 40)${NC}"
+else
+  echo -e "    ${GREEN}✓ /api/books/<id>: ${OK}/40 ok${NC}"
+fi
 
-echo "  → GET /api/books/search?q=SRE (10 запросов)..."
-SUCCESS=0
-for i in $(seq 1 10); do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${BASE_URL}/api/books/search?q=SRE")
-  [[ "$STATUS" == "200" ]] && ((SUCCESS++))
-done
-echo -e "    ${GREEN}✓ Успешных: ${SUCCESS}/10${NC}"
-
-echo "  → GET /api/books/search?q=Google (10 запросов)..."
-SUCCESS=0
-for i in $(seq 1 10); do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${BASE_URL}/api/books/search?q=Google")
-  [[ "$STATUS" == "200" ]] && ((SUCCESS++))
-done
-echo -e "    ${GREEN}✓ Успешных: ${SUCCESS}/10${NC}"
+echo "  → GET /api/books/search (20 запросов)..."
+send_requests "${BASE_URL}/api/books/search?q=SRE" 10 "/api/books/search?q=SRE"
+send_requests "${BASE_URL}/api/books/search?q=Google" 10 "/api/books/search?q=Google"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -128,13 +127,8 @@ echo ""
 # ---------------------------------------------------------------------------
 echo -e "${CYAN}▶ 5.4 Генерация трафика на order-api${NC}"
 
-echo "  → GET /api/orders (20 запросов)..."
-SUCCESS=0
-for i in $(seq 1 20); do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} ${BASE_URL}/api/orders)
-  [[ "$STATUS" == "200" ]] && ((SUCCESS++))
-done
-echo -e "    ${GREEN}✓ Успешных: ${SUCCESS}/20${NC}"
+echo "  → GET /api/orders (60 запросов)..."
+send_requests "${BASE_URL}/api/orders" 60 "/api/orders"
 
 echo "  → POST /api/orders — создание заказов (5 штук)..."
 CREATED=0
@@ -154,11 +148,37 @@ for i in $(seq 1 5); do
 done
 echo ""
 
-echo "  → GET /api/orders/<id> (запрос деталей созданных заказов)..."
+echo "  → GET /api/orders/<id> (детали заказов)..."
 for order_id in $(seq 1 ${CREATED}); do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${BASE_URL}/api/orders/${order_id}")
   echo -e "    Заказ #${order_id}: HTTP ${STATUS}"
 done
+echo ""
+
+# ---------------------------------------------------------------------------
+# 5.5 Burst-трафик — нагрузка для проявления error rate
+# ---------------------------------------------------------------------------
+echo -e "${CYAN}▶ 5.5 Burst-трафик (параллельные запросы)${NC}"
+echo "  Отправляем 100 запросов параллельно (10 пачек по 10)..."
+BURST_OK=0; BURST_ERR=0
+for batch in $(seq 1 10); do
+  PIDS=""
+  TMPDIR=$(mktemp -d)
+  for j in $(seq 1 10); do
+    (
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${CURL_RESOLVE} "${BASE_URL}/api/books")
+      echo "$STATUS" > "${TMPDIR}/${j}"
+    ) &
+    PIDS="$PIDS $!"
+  done
+  wait $PIDS 2>/dev/null
+  for f in "${TMPDIR}"/*; do
+    S=$(cat "$f")
+    if [[ "$S" =~ ^2 ]]; then ((BURST_OK++)); else ((BURST_ERR++)); fi
+  done
+  rm -rf "$TMPDIR"
+done
+echo -e "    ${YELLOW}Burst: ${BURST_OK} ok, ${BURST_ERR} errors (из 100)${NC}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -171,27 +191,25 @@ echo ""
 echo -e "${CYAN}▶ Доступ к Grafana:${NC}"
 echo "  http://grafana.bookshop.local (admin/admin)"
 echo ""
-echo -e "${CYAN}▶ Поиск трейсов:${NC}"
-echo "  1. Grafana → Explore → выберите datasource Tempo"
-echo "  2. Search → Service Name: catalog-api или order-api"
-echo "  3. Откройте trace → увидите span tree:"
+echo -e "${CYAN}▶ Трейсы (Tempo — Grafana → Explore → Tempo):${NC}"
+echo ""
+echo "  1. Search → Service Name: catalog-api или order-api"
+echo "  2. Откройте trace → увидите span tree:"
 echo "     Flask HTTP handler → psycopg2 SELECT/INSERT"
 echo ""
-echo -e "${CYAN}▶ Примеры TraceQL-запросов:${NC}"
+echo "  Примеры TraceQL-запросов (datasource: Tempo):"
+echo '    { resource.service.name = "order-api" }'
+echo '    { resource.service.name = "catalog-api" && duration > 500ms }'
+echo '    { resource.service.name = "order-api" && span.http.status_code >= 500 }'
 echo ""
-echo '  # Все запросы order-api'
-echo '  { resource.service.name = "order-api" }'
+echo -e "${CYAN}▶ Логи (Loki — Grafana → Explore → Loki):${NC}"
 echo ""
-echo '  # Медленные запросы (> 500ms)'
-echo '  { resource.service.name = "catalog-api" && duration > 500ms }'
+echo "  Примеры LogQL-запросов (datasource: Loki):"
+echo '    {app="catalog-api"}'
+echo '    {app="order-api"} | json | level="ERROR"'
+echo '    {app="catalog-api"} | json | traceID != ""'
 echo ""
-echo '  # Ошибки (5xx)'
-echo '  { resource.service.name = "order-api" && span.http.status_code >= 500 }'
-echo ""
-echo -e "${CYAN}▶ Логи (Loki):${NC}"
-echo "  1. Grafana → Explore → Loki"
-echo '  2. {app="catalog-api"} | json | traceID != ""'
-echo "  3. Нажмите на TraceID → откроется trace в Tempo"
+echo "  Кликните на TraceID в строке лога → откроется trace в Tempo"
 echo ""
 echo -e "${CYAN}▶ SRE Workflow:${NC}"
 echo "  Alert (burn rate) → Dashboard (p99 рост) → Trace (медленный span) → Logs (детали) → Root Cause"

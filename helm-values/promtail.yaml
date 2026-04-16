@@ -10,8 +10,8 @@ config:
   # Pipeline stages для извлечения полей из JSON-логов
   snippets:
     pipelineStages:
-      - cri: {}
-      # Парсим JSON-логи (app.logger); non-JSON строки (gunicorn access) пропускаются
+      - docker: {}
+      # Парсим JSON-логи приложения; non-JSON строки пропускаются
       - json:
           expressions:
             level: level
@@ -22,7 +22,7 @@ config:
           level:
           service:
       # traceID НЕ делаем лейблом (high cardinality),
-      # оставляем в structured metadata для поиска через |= "traceID"
+      # сохраняем в structured metadata для корреляции logs↔traces
       - structured_metadata:
           trace_id:
 

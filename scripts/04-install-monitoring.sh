@@ -55,9 +55,12 @@ else
   echo -e "${GREEN}✓ ingress-nginx установлен${NC}"
 fi
 
-# Получаем External IP
-EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "<pending>")
-echo -e "  External IP: ${BOLD}${EXTERNAL_IP}${NC}"
+# Получаем Ingress IP (fallback на localhost для Colima VZ)
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+if [[ -z "$EXTERNAL_IP" ]] || ! curl -sf --connect-timeout 2 -H 'Host: bookshop.local' "http://${EXTERNAL_IP}/" > /dev/null 2>&1; then
+  EXTERNAL_IP="127.0.0.1"
+fi
+echo -e "  Ingress IP: ${BOLD}${EXTERNAL_IP}${NC}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -201,13 +204,16 @@ echo ""
 # ---------------------------------------------------------------------------
 # Доступ
 # ---------------------------------------------------------------------------
-EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "<pending>")
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+if [[ -z "$EXTERNAL_IP" ]] || ! curl -sf --connect-timeout 2 -H 'Host: bookshop.local' "http://${EXTERNAL_IP}/" > /dev/null 2>&1; then
+  EXTERNAL_IP="127.0.0.1"
+fi
 
 echo -e "${BOLD}▶ Доступ к компонентам:${NC}"
 echo ""
-echo "  External IP: ${EXTERNAL_IP}"
+echo "  Ingress IP: ${EXTERNAL_IP}"
 echo ""
-echo "  Добавьте в /etc/hosts (или передайте через curl -H 'Host: ...'):"
+echo "  Добавьте в /etc/hosts (если ещё не добавлено):"
 echo "  ${EXTERNAL_IP}  bookshop.local grafana.bookshop.local prometheus.bookshop.local alertmanager.bookshop.local"
 echo ""
 echo "  Grafana:      http://grafana.bookshop.local      (admin/admin)"

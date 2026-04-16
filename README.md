@@ -186,11 +186,9 @@ kubectl get pods -n monitoring
 
 **Доступ через Ingress:**
 ```bash
-# Узнать External IP
-kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-
-# Добавить в /etc/hosts (заменить <EXTERNAL_IP> на полученный IP)
-echo "<EXTERNAL_IP>  bookshop.local grafana.bookshop.local prometheus.bookshop.local alertmanager.bookshop.local" | sudo tee -a /etc/hosts
+# Добавить в /etc/hosts
+# Для Colima (VZ driver) порты пробрасываются на localhost:
+echo "127.0.0.1  bookshop.local grafana.bookshop.local prometheus.bookshop.local alertmanager.bookshop.local" | sudo tee -a /etc/hosts
 ```
 
 | Компонент    | URL                                | Credentials  |
@@ -285,7 +283,7 @@ bash scripts/05-generate-traffic.sh
 3. Откройте trace → **span tree**: Flask HTTP handler → psycopg2 SELECT
 4. Изучите атрибуты: `http.method`, `http.url`, `db.statement`, `db.system`
 
-**Примеры TraceQL-запросов:**
+**Примеры TraceQL-запросов (Grafana → Explore → Tempo):**
 ```
 # Все запросы order-api
 { resource.service.name = "order-api" }
@@ -298,6 +296,18 @@ bash scripts/05-generate-traffic.sh
 
 # Медленные SQL-запросы
 { span.db.system = "postgresql" && duration > 100ms }
+```
+
+**Примеры LogQL-запросов (Grafana → Explore → Loki):**
+```
+# Все логи catalog-api
+{app="catalog-api"}
+
+# Только ошибки order-api
+{app="order-api"} | json | level="ERROR"
+
+# Логи с трейсами (кликните TraceID → откроется Tempo)
+{app="catalog-api"} | json | traceID != ""
 ```
 
 **Service Graph:**
@@ -326,7 +336,7 @@ Grafana → Explore → Tempo → **Service Graph** — автоматическ
 |-------|-------------|
 | Metrics → Traces | Из дашборда переходим к трейсам за период аномалии |
 | Traces → Metrics | Tempo Metrics Generator создаёт `service_graph_request_total` в Prometheus |
-| Traces → Logs | Через TraceID в логах (требуется Loki — домашнее задание) |
+| Traces → Logs | Tempo → Loki через TraceID (настроено в datasource) |
 
 ---
 
@@ -337,9 +347,8 @@ Grafana → Explore → Tempo → **Service Graph** — автоматическ
    span = trace.get_current_span()
    span.set_attribute("book.id", book_id)
    ```
-2. **Loki + логи:** настроить Loki и связать логи с трейсами через TraceID
-3. **Grafana dashboard:** создать дашборд с панелями: SLO gauge, request rate, latency heatmap, trace search panel
-4. **TraceQL:** написать запросы для поиска медленных SQL-запросов
+2. **Grafana dashboard:** создать дашборд с панелями: SLO gauge, request rate, latency heatmap, trace search panel
+3. **TraceQL:** написать запросы для поиска медленных SQL-запросов
 
 ---
 

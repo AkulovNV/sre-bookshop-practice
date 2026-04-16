@@ -26,12 +26,13 @@ echo ""
 EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 CURL_RESOLVE=""
 
-if [[ -n "$EXTERNAL_IP" ]]; then
-  CURL_RESOLVE="--resolve bookshop.local:80:${EXTERNAL_IP}"
-  echo -e "${GREEN}✓ Ingress External IP: ${EXTERNAL_IP}${NC}"
-else
-  echo -e "${YELLOW}⚠ Ingress не найден — используем kubectl exec для проверок${NC}"
+# Colima с VZ driver не маршрутизирует IP VM на хост — используем localhost
+if [[ -z "$EXTERNAL_IP" ]] || ! curl -sf --connect-timeout 2 -H 'Host: bookshop.local' "http://${EXTERNAL_IP}/" > /dev/null 2>&1; then
+  EXTERNAL_IP="127.0.0.1"
 fi
+
+CURL_RESOLVE="--resolve bookshop.local:80:${EXTERNAL_IP}"
+echo -e "${GREEN}✓ Ingress IP: ${EXTERNAL_IP}${NC}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -49,8 +50,20 @@ for SVC in catalog-api order-api; do
 
     echo -e "${GREEN}  [${SVC}] Pod: ${POD}${NC}"
 
+    # Вспомогательная функция: HTTP-код через python (curl нет в python:3.12-slim)
+    _http_code() {
+        kubectl exec -n ${NS} ${POD} -- python3 -c "
+import urllib.request, sys
+try:
+    r = urllib.request.urlopen('http://localhost:8080${1}', timeout=5)
+    print(r.status)
+except Exception as e:
+    print(getattr(e, 'code', '000'))
+" 2>/dev/null || echo "000"
+    }
+
     # Liveness
-    HEALTH=$(kubectl exec -n ${NS} ${POD} -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/healthz 2>/dev/null || echo "000")
+    HEALTH=$(_http_code /healthz)
     if [ "$HEALTH" = "200" ]; then
         echo -e "    /healthz (liveness):  ${GREEN}✓ 200 OK${NC}"
     else
@@ -58,7 +71,7 @@ for SVC in catalog-api order-api; do
     fi
 
     # Readiness
-    READY=$(kubectl exec -n ${NS} ${POD} -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ready 2>/dev/null || echo "000")
+    READY=$(_http_code /ready)
     if [ "$READY" = "200" ]; then
         echo -e "    /ready (readiness):   ${GREEN}✓ 200 OK${NC}"
     else
@@ -66,7 +79,7 @@ for SVC in catalog-api order-api; do
     fi
 
     # Metrics
-    METRICS=$(kubectl exec -n ${NS} ${POD} -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metrics 2>/dev/null || echo "000")
+    METRICS=$(_http_code /metrics)
     if [ "$METRICS" = "200" ]; then
         echo -e "    /metrics (prometheus): ${GREEN}✓ 200 OK${NC}"
     else
@@ -127,8 +140,11 @@ echo ""
 CATALOG_POD=$(kubectl get pod -n ${NS} -l app.kubernetes.io/name=catalog-api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
 if [ -n "$CATALOG_POD" ]; then
     echo -e "${YELLOW}  catalog-api — ключевые SLI метрики:${NC}"
-    kubectl exec -n ${NS} ${CATALOG_POD} -- curl -s http://localhost:8080/metrics 2>/dev/null | \
-        grep -E "^(http_requests_total|http_request_duration_seconds|db_)" | head -20 || echo "  (метрики недоступны)"
+    kubectl exec -n ${NS} ${CATALOG_POD} -- python3 -c "
+import urllib.request
+r = urllib.request.urlopen('http://localhost:8080/metrics', timeout=5)
+print(r.read().decode())
+" 2>/dev/null | grep -E "^(http_requests_total|http_request_duration_seconds|db_)" | head -20 || echo "  (метрики недоступны)"
     echo ""
 fi
 

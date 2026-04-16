@@ -61,7 +61,8 @@ spec:
               app.kubernetes.io/name: order-api
       containers:
         - name: order-api
-          image: akulovnv/bookshop-order-api:v1.3.0
+          image: akulovnv/bookshop-order-api:v1.4.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
@@ -76,6 +77,15 @@ spec:
               value: "order-api"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://tempo.monitoring:4317"
+            # Chaos Engineering — симуляция ошибок для демонстрации SRE
+            - name: CHAOS_ERROR_RATE
+              value: "0.03"
+            - name: CHAOS_SLOW_RATE
+              value: "0.08"
+            - name: CHAOS_SLOW_MIN_MS
+              value: "800"
+            - name: CHAOS_SLOW_MAX_MS
+              value: "3000"
             - name: POD_NAME
               valueFrom:
                 fieldRef:

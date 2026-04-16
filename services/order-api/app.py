@@ -11,6 +11,7 @@ Endpoints:
 """
 import os
 import time
+import random
 import json
 import logging
 import sys
@@ -88,6 +89,15 @@ DATABASE_URL = os.environ.get(
 )
 
 # ---------------------------------------------------------------------------
+# Chaos Engineering — управляемая симуляция ошибок (env-переменные)
+# ---------------------------------------------------------------------------
+CHAOS_ERROR_RATE = float(os.environ.get("CHAOS_ERROR_RATE", "0"))
+CHAOS_SLOW_RATE = float(os.environ.get("CHAOS_SLOW_RATE", "0"))
+CHAOS_SLOW_MIN_MS = int(os.environ.get("CHAOS_SLOW_MIN_MS", "800"))
+CHAOS_SLOW_MAX_MS = int(os.environ.get("CHAOS_SLOW_MAX_MS", "3000"))
+CHAOS_SKIP_ENDPOINTS = {"healthz", "ready", "metrics"}
+
+# ---------------------------------------------------------------------------
 # Prometheus метрики
 # ---------------------------------------------------------------------------
 REQUEST_COUNT = Counter(
@@ -146,6 +156,22 @@ def close_db(exception):
 def before_request():
     g.start_time = time.monotonic()
     IN_PROGRESS.inc()
+
+    # Chaos: пропускаем probes и metrics
+    if request.endpoint in CHAOS_SKIP_ENDPOINTS:
+        return
+
+    # Chaos: случайная ошибка 5xx
+    if CHAOS_ERROR_RATE > 0 and random.random() < CHAOS_ERROR_RATE:
+        code = random.choice([500, 502, 503])
+        app.logger.error("Chaos: simulated %d error on %s", code, request.path)
+        return jsonify({"error": "chaos_simulated", "message": f"Simulated {code} error"}), code
+
+    # Chaos: случайная задержка
+    if CHAOS_SLOW_RATE > 0 and random.random() < CHAOS_SLOW_RATE:
+        delay_ms = random.randint(CHAOS_SLOW_MIN_MS, CHAOS_SLOW_MAX_MS)
+        app.logger.warning("Chaos: simulated %dms delay on %s", delay_ms, request.path)
+        time.sleep(delay_ms / 1000.0)
 
 @app.after_request
 def after_request(response):

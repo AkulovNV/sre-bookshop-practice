@@ -160,11 +160,15 @@ echo ""
 # ---------------------------------------------------------------------------
 # Доступ
 # ---------------------------------------------------------------------------
-EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "<pending>")
+EXTERNAL_IP=$(kubectl get svc ingress-nginx-controller -n ${NS_INGRESS} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+# Colima с VZ driver не маршрутизирует IP VM на хост — используем localhost
+if [[ -z "$EXTERNAL_IP" ]] || ! curl -sf --connect-timeout 2 -H 'Host: bookshop.local' "http://${EXTERNAL_IP}/" > /dev/null 2>&1; then
+  EXTERNAL_IP="127.0.0.1"
+fi
 
 echo -e "${BOLD}▶ Доступ к приложению:${NC}"
 echo ""
-echo -e "  External IP: ${BOLD}${EXTERNAL_IP}${NC}"
+echo -e "  Ingress IP: ${BOLD}${EXTERNAL_IP}${NC}"
 echo ""
 echo "  Добавьте в /etc/hosts (если ещё не добавлено):"
 echo "  ${EXTERNAL_IP}  bookshop.local grafana.bookshop.local prometheus.bookshop.local alertmanager.bookshop.local"
@@ -172,9 +176,9 @@ echo ""
 echo "  Приложение:  http://bookshop.local"
 echo ""
 echo "  Проверка API:"
-echo "  curl -H 'Host: bookshop.local' http://${EXTERNAL_IP}/api/books"
-echo "  curl -H 'Host: bookshop.local' http://${EXTERNAL_IP}/api/orders"
-echo "  curl -H 'Host: bookshop.local' 'http://${EXTERNAL_IP}/api/books/search?q=SRE'"
+echo "  curl http://bookshop.local/api/books"
+echo "  curl http://bookshop.local/api/orders"
+echo "  curl 'http://bookshop.local/api/books/search?q=SRE'"
 echo ""
 
 echo -e "${BOLD}▶ Следующий шаг:${NC}"
