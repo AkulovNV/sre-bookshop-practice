@@ -68,30 +68,30 @@ spec:
         # --- catalog-api: Availability SLI ---
         - record: bookshop:catalog_api:availability:rate5m
           expr: |
-            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[5m]))
+            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             /
-            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[5m]))
+            sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
           labels:
             service: catalog-api
             sli_type: availability
 
-        # --- catalog-api: Latency SLI (p95 < 300ms) ---
+        # --- catalog-api: Latency SLI (p95 < 250ms) ---
         - record: bookshop:catalog_api:latency_good:rate5m
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api", le="0.3"}[5m]))
+            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api", le="0.25", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             /
-            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="catalog-api"}[5m]))
+            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
           labels:
             service: catalog-api
             sli_type: latency
-            threshold: "300ms"
+            threshold: "250ms"
 
         # --- order-api: Availability SLI ---
         - record: bookshop:order_api:availability:rate5m
           expr: |
-            sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[5m]))
+            sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             /
-            sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[5m]))
+            sum(rate(http_requests_total{namespace="bookshop", job="order-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
           labels:
             service: order-api
             sli_type: availability
@@ -99,9 +99,9 @@ spec:
         # --- order-api: Latency SLI (p95 < 500ms) ---
         - record: bookshop:order_api:latency_good:rate5m
           expr: |
-            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api", le="0.5"}[5m]))
+            sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api", le="0.5", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             /
-            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="order-api"}[5m]))
+            sum(rate(http_request_duration_seconds_count{namespace="bookshop", job="order-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
           labels:
             service: order-api
             sli_type: latency
@@ -143,13 +143,13 @@ spec:
         - alert: CatalogApiHighBurnRate
           expr: |
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[1h]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[1h]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[1h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[1h]))
             ) > (14.4 * 0.005)
             and
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[5m]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[5m]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[5m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             ) > (14.4 * 0.005)
           for: 2m
           labels:
@@ -165,13 +165,13 @@ spec:
         - alert: OrderApiHighBurnRate
           expr: |
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[1h]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[1h]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[1h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api", exported_endpoint!~"healthz|ready|metrics"}[1h]))
             ) > (14.4 * 0.0005)
             and
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5.."}[5m]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api"}[5m]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="order-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[5m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="order-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
             ) > (14.4 * 0.0005)
           for: 1m  # Быстрее реагируем для критичного сервиса
           labels:
@@ -187,13 +187,13 @@ spec:
         - alert: CatalogApiSlowBurnRate
           expr: |
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[6h]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[6h]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[6h]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[6h]))
             ) > (6 * 0.005)
             and
             (
-              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5.."}[30m]))
-                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api"}[30m]))
+              1 - sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", status!~"5..", exported_endpoint!~"healthz|ready|metrics"}[30m]))
+                  / sum(rate(http_requests_total{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[30m]))
             ) > (6 * 0.005)
           for: 15m
           labels:
@@ -207,22 +207,22 @@ spec:
         - alert: CatalogApiLatencyHigh
           expr: |
             histogram_quantile(0.95,
-              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api"}[5m]))
+              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="catalog-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
               by (le)
-            ) > 0.3
+            ) > 0.25
           for: 5m
           labels:
             severity: warning
             service: catalog-api
             sli_type: latency
           annotations:
-            summary: "catalog-api: p95 latency > 300ms"
-            description: "catalog-api p95 latency: {{ $value | humanizeDuration }}. SLO threshold: 300ms."
+            summary: "catalog-api: p95 latency > 250ms"
+            description: "catalog-api p95 latency: {{ $value | humanizeDuration }}. SLO threshold: 250ms."
 
         - alert: OrderApiLatencyHigh
           expr: |
             histogram_quantile(0.95,
-              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api"}[5m]))
+              sum(rate(http_request_duration_seconds_bucket{namespace="bookshop", job="order-api", exported_endpoint!~"healthz|ready|metrics"}[5m]))
               by (le)
             ) > 0.5
           for: 5m
@@ -232,6 +232,7 @@ spec:
             sli_type: latency
           annotations:
             summary: "order-api: p95 latency > 500ms"
+            description: "order-api p95 latency: {{ $value | humanizeDuration }}. SLO threshold: 500ms."
 
         # === ERROR BUDGET EXHAUSTION ===
         - alert: OrderApiErrorBudgetLow

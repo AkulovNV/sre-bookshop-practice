@@ -79,11 +79,11 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "expr": "sum(rate(http_requests_total{job=\"catalog-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m]))",
               "legendFormat": "catalog-api"
             },
             {
-              "expr": "sum(rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "expr": "sum(rate(http_requests_total{job=\"order-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m]))",
               "legendFormat": "order-api"
             }
           ],
@@ -124,7 +124,7 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"catalog-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m]))",
               "legendFormat": "{{ endpoint }}"
             },
             {
@@ -153,7 +153,7 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "expr": "sum by (endpoint) (rate(http_requests_total{job=\"order-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m]))",
               "legendFormat": "{{ endpoint }}"
             },
             {
@@ -182,19 +182,19 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
               "legendFormat": "catalog-api p95"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"catalog-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
               "legendFormat": "catalog-api p99"
             },
             {
-              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
               "legendFormat": "order-api p95"
             },
             {
-              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"order-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m])) by (le))",
               "legendFormat": "order-api p99"
             }
           ],
@@ -238,7 +238,7 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "targets": [
             {
-              "expr": "sum by (job, status) (rate(http_requests_total{job=~\"catalog-api|order-api\", endpoint!~\"healthz|ready|metrics\"}[5m]))",
+              "expr": "sum by (job, status) (rate(http_requests_total{job=~\"catalog-api|order-api\", exported_endpoint!~\"healthz|ready|metrics\"}[5m]))",
               "legendFormat": "{{ job }} {{ status }}"
             }
           ],
